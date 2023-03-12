@@ -3,6 +3,7 @@ package RedisQueues
 import (
 	"fmt"
 	"github.com/adjust/rmq/v4"
+	"github.com/s8sg/goflow/core/sdk"
 	"github.com/s8sg/goflow/runtime"
 )
 
@@ -16,8 +17,14 @@ func (r *RedisQueue) PublishBytes(data []byte) error {
 
 var _ runtime.TaskQueue = &RedisQueue{}
 
-func OpenTaskQueue(queueId, redisUrl string) (runtime.TaskQueue, error) {
-	connection, err := rmq.OpenConnection("goflow", "tcp", redisUrl, 0, nil)
+type RedisQueueProvider struct {
+	RedisUrl string
+}
+
+var _ sdk.QueueProvider = & RedisQueueProvider{}
+
+func (r *RedisQueueProvider) OpenTaskQueue(queueId string) (runtime.TaskQueue, error) {
+	connection, err := rmq.OpenConnection("goflow", "tcp", r.RedisUrl, 0, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initiate connection, error %v", err)
 	}

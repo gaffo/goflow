@@ -25,6 +25,7 @@ type FlowRuntime struct {
 	Flows                   map[string]FlowDefinitionHandler
 	OpenTracingUrl          string
 	RedisURL                string
+	queueProvider           sdk.QueueProvider
 	stateStore              sdk.StateStore
 	DataStore               sdk.DataStore
 	Logger                  sdk.Logger
@@ -84,6 +85,8 @@ func (fRuntime *FlowRuntime) Init() error {
 		DB:   0,
 	})
 
+	fRuntime.queueProvider = &RedisQueues.RedisQueueProvider{RedisUrl: fRuntime.RedisURL}
+
 	fRuntime.stateStore, err = initStateStore(fRuntime.RedisURL)
 	if err != nil {
 		return fmt.Errorf("failed to initialize the StateStore, %v", err)
@@ -133,7 +136,7 @@ type TaskQueue interface {
 }
 
 func (fRuntime *FlowRuntime) Execute(flowName string, request *runtime.Request) error {
-	taskQueue, err := RedisQueues.OpenTaskQueue(fRuntime.internalRequestQueueId(flowName), fRuntime.RedisURL)
+	taskQueue, err := fRuntime.queueProvider.OpenTaskQueue(fRuntime.internalRequestQueueId(flowName))
 	if err != nil {
 		return fmt.Errorf("failed to open queue, error %v", err)
 	}
@@ -155,7 +158,7 @@ func (fRuntime *FlowRuntime) Execute(flowName string, request *runtime.Request) 
 }
 
 func (fRuntime *FlowRuntime) Pause(flowName string, request *runtime.Request) error {
-	taskQueue, err := RedisQueues.OpenTaskQueue(fRuntime.internalRequestQueueId(flowName), fRuntime.RedisURL)
+	taskQueue, err := fRuntime.queueProvider.OpenTaskQueue(fRuntime.internalRequestQueueId(flowName))
 	if err != nil {
 		return fmt.Errorf("failed to open queue, error %v", err)
 	}
@@ -177,7 +180,7 @@ func (fRuntime *FlowRuntime) Pause(flowName string, request *runtime.Request) er
 }
 
 func (fRuntime *FlowRuntime) Stop(flowName string, request *runtime.Request) error {
-	taskQueue, err := RedisQueues.OpenTaskQueue(fRuntime.internalRequestQueueId(flowName), fRuntime.RedisURL)
+	taskQueue, err := fRuntime.queueProvider.OpenTaskQueue(fRuntime.internalRequestQueueId(flowName))
 	if err != nil {
 		return fmt.Errorf("failed to open queue, error %v", err)
 	}
@@ -199,7 +202,7 @@ func (fRuntime *FlowRuntime) Stop(flowName string, request *runtime.Request) err
 }
 
 func (fRuntime *FlowRuntime) Resume(flowName string, request *runtime.Request) error {
-	taskQueue, err := RedisQueues.OpenTaskQueue(fRuntime.internalRequestQueueId(flowName), fRuntime.RedisURL)
+	taskQueue, err := fRuntime.queueProvider.OpenTaskQueue(fRuntime.internalRequestQueueId(flowName))
 	if err != nil {
 		return fmt.Errorf("failed to open queue, error %v", err)
 	}

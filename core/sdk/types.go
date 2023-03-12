@@ -1,5 +1,7 @@
 package sdk
 
+import "github.com/s8sg/goflow/runtime"
+
 // DataStore for Storing Data
 type DataStore interface {
 	// Configure the DaraStore with flow name and request ID
@@ -14,6 +16,10 @@ type DataStore interface {
 	Del(key string) error
 	// Cleanup all the resources in DataStore
 	Cleanup() error
+}
+
+type QueueProvider interface {
+	OpenTaskQueue(queueId string) (runtime.TaskQueue, error)
 }
 
 // StateStore for saving execution state
