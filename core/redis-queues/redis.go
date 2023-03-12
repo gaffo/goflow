@@ -16,7 +16,7 @@ func (r *RedisQueue) PublishBytes(data []byte) error {
 
 var _ runtime.TaskQueue = &RedisQueue{}
 
-func OpenRedisTaskQueue(queueId, redisUrl string) (runtime.TaskQueue, error) {
+func OpenTaskQueue(queueId, redisUrl string) (runtime.TaskQueue, error) {
 	connection, err := rmq.OpenConnection("goflow", "tcp", redisUrl, 0, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initiate connection, error %v", err)
