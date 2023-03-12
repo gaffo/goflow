@@ -1,6 +1,8 @@
 package sdk
 
-import "github.com/s8sg/goflow/runtime"
+import (
+	"time"
+)
 
 // DataStore for Storing Data
 type DataStore interface {
@@ -18,8 +20,32 @@ type DataStore interface {
 	Cleanup() error
 }
 
+// Delivery is the payload / action wrapper from a queue
+type Delivery interface {
+	Payload() string
+
+	Ack() error
+	Reject() error
+	Push() error
+}
+
+// QueueConsumer that consumes from a queue
+type QueueConsumer interface {
+	Consume(delivery Delivery)
+}
+
+// TaskQueue represents a queue, mostly modeled after rmq.Queue
+type TaskQueue interface {
+	PublishBytes(data []byte) error
+	StartConsuming(i int64, second time.Duration) error
+	SetPushQueue(queue TaskQueue)
+	AddConsumer(sprintf string, consumer QueueConsumer) (string, error)
+}
+
+// QueueProvider does high level wrapping of the real queue provider (initially rmq)
 type QueueProvider interface {
-	OpenTaskQueue(queueId string) (runtime.TaskQueue, error)
+	OpenTaskQueue(queueId string) (TaskQueue, error)
+	StopAllConsuming() (<-chan struct{}, error)
 }
 
 // StateStore for saving execution state

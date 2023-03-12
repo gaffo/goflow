@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/adjust/rmq/v4"
 	"github.com/jasonlvhit/gocron"
 	"github.com/rs/xid"
 	RedisQueues "github.com/s8sg/goflow/core/redis-queues"
@@ -41,7 +40,7 @@ type FlowRuntime struct {
 
 	eventHandler sdk.EventHandler
 
-	taskQueues map[string]rmq.Queue
+	taskQueues map[string]sdk.TaskQueue
 	srv        *http.Server
 	rdb        *redis.Client
 }
@@ -129,10 +128,6 @@ func (fRuntime *FlowRuntime) CreateExecutor(req *runtime.Request) (executor.Exec
 	}
 	err := ex.Init(req)
 	return ex, err
-}
-
-type TaskQueue interface {
-	PublishBytes(data []byte) error
 }
 
 func (fRuntime *FlowRuntime) Execute(flowName string, request *runtime.Request) error {
@@ -246,27 +241,25 @@ func (fRuntime *FlowRuntime) StopServer() error {
 
 // StartQueueWorker starts listening for request in queue
 func (fRuntime *FlowRuntime) StartQueueWorker(errorChan chan error) error {
-	connection, err := rmq.OpenConnection("goflow", "tcp", fRuntime.RedisURL, 0, nil)
-	if err != nil {
-		return fmt.Errorf("failed to initiate connection, error %v", err)
-	}
-
-	fRuntime.taskQueues = make(map[string]rmq.Queue)
+	fRuntime.taskQueues = make(map[string]sdk.TaskQueue)
 	for flowName := range fRuntime.Flows {
-		taskQueue, err := connection.OpenQueue(fRuntime.internalRequestQueueId(flowName))
+		taskQueue, err := fRuntime.queueProvider.OpenTaskQueue(fRuntime.internalRequestQueueId(flowName))
+		//taskQueue, err := connection.OpenQueue()
 		if err != nil {
 			return fmt.Errorf("failed to open queue, error %v", err)
 		}
 
-		var pushQueues = make([]rmq.Queue, fRuntime.RetryQueueCount)
+		var pushQueues = make([]sdk.TaskQueue, fRuntime.RetryQueueCount)
 		var previousQueue = taskQueue
 
 		index := 0
 		for index < fRuntime.RetryQueueCount {
-			pushQueues[index], err = connection.OpenQueue(fRuntime.internalRequestQueueId(flowName) + "push-" + fmt.Sprint())
+			pushQueue, err := fRuntime.queueProvider.OpenTaskQueue(fRuntime.internalRequestQueueId(flowName) + "push-" + fmt.Sprint())
 			if err != nil {
 				return fmt.Errorf("failed to open push queue, error %v", err)
 			}
+			pushQueues[index] = pushQueue
+
 			previousQueue.SetPushQueue(pushQueues[index])
 			previousQueue = pushQueues[index]
 			index++
@@ -308,9 +301,13 @@ func (fRuntime *FlowRuntime) StartQueueWorker(errorChan chan error) error {
 
 	fRuntime.Logger.Log("[goflow] queue worker started successfully")
 
-	err = <-errorChan
-	<-connection.StopAllConsuming()
-	return err
+	c, err := fRuntime.queueProvider.StopAllConsuming()
+	if err != nil {
+		return err
+	}
+	<-c
+
+	return <-errorChan
 }
 
 // StartRuntime starts the runtime
@@ -376,7 +373,7 @@ func (fRuntime *FlowRuntime) EnqueuePartialRequest(pr *runtime.Request) error {
 }
 
 // Consume messages from queue
-func (fRuntime *FlowRuntime) Consume(message rmq.Delivery) {
+func (fRuntime *FlowRuntime) Consume(message sdk.Delivery) {
 	var task Task
 	if err := json.Unmarshal([]byte(message.Payload()), &task); err != nil {
 		fRuntime.Logger.Log("[goflow] rejecting task for parse failure, error " + err.Error())
