@@ -127,15 +127,22 @@ func (fRuntime *FlowRuntime) CreateExecutor(req *runtime.Request) (executor.Exec
 	return ex, err
 }
 
-func (fRuntime *FlowRuntime) Execute(flowName string, request *runtime.Request) error {
-
-	connection, err := rmq.OpenConnection("goflow", "tcp", fRuntime.RedisURL, 0, nil)
+func openRedisTaskQueue(queueId, redisUrl string) (rmq.Queue, error) {
+	connection, err := rmq.OpenConnection("goflow", "tcp", redisUrl, 0, nil)
 	if err != nil {
-		return fmt.Errorf("failed to initiate connection, error %v", err)
+		return nil, fmt.Errorf("failed to initiate connection, error %v", err)
 	}
-	taskQueue, err := connection.OpenQueue(fRuntime.internalRequestQueueId(flowName))
+	taskQueue, err := connection.OpenQueue(queueId)
 	if err != nil {
-		return fmt.Errorf("failed to get queue, error %v", err)
+		return nil, fmt.Errorf("failed to get queue, error %v", err)
+	}
+	return taskQueue, nil
+}
+
+func (fRuntime *FlowRuntime) Execute(flowName string, request *runtime.Request) error {
+	taskQueue, err := openRedisTaskQueue(fRuntime.internalRequestQueueId(flowName), fRuntime.RedisURL)
+	if err != nil {
+		return fmt.Errorf("failed to open queue, error %v", err)
 	}
 
 	data, _ := json.Marshal(&Task{
@@ -155,14 +162,11 @@ func (fRuntime *FlowRuntime) Execute(flowName string, request *runtime.Request) 
 }
 
 func (fRuntime *FlowRuntime) Pause(flowName string, request *runtime.Request) error {
-	connection, err := rmq.OpenConnection("goflow", "tcp", fRuntime.RedisURL, 0, nil)
+	taskQueue, err := openRedisTaskQueue(fRuntime.internalRequestQueueId(flowName), fRuntime.RedisURL)
 	if err != nil {
-		return fmt.Errorf("failed to initiate connection, error %v", err)
+		return fmt.Errorf("failed to open queue, error %v", err)
 	}
-	taskQueue, err := connection.OpenQueue(fRuntime.internalRequestQueueId(flowName))
-	if err != nil {
-		return fmt.Errorf("failed to get queue, error %v", err)
-	}
+
 	data, _ := json.Marshal(&Task{
 		FlowName:    flowName,
 		RequestID:   request.RequestID,
@@ -180,14 +184,11 @@ func (fRuntime *FlowRuntime) Pause(flowName string, request *runtime.Request) er
 }
 
 func (fRuntime *FlowRuntime) Stop(flowName string, request *runtime.Request) error {
-	connection, err := rmq.OpenConnection("goflow", "tcp", fRuntime.RedisURL, 0, nil)
+	taskQueue, err := openRedisTaskQueue(fRuntime.internalRequestQueueId(flowName), fRuntime.RedisURL)
 	if err != nil {
-		return fmt.Errorf("failed to initiate connection, error %v", err)
+		return fmt.Errorf("failed to open queue, error %v", err)
 	}
-	taskQueue, err := connection.OpenQueue(fRuntime.internalRequestQueueId(flowName))
-	if err != nil {
-		return fmt.Errorf("failed to get queue, error %v", err)
-	}
+
 	data, _ := json.Marshal(&Task{
 		FlowName:    flowName,
 		RequestID:   request.RequestID,
@@ -205,14 +206,11 @@ func (fRuntime *FlowRuntime) Stop(flowName string, request *runtime.Request) err
 }
 
 func (fRuntime *FlowRuntime) Resume(flowName string, request *runtime.Request) error {
-	connection, err := rmq.OpenConnection("goflow", "tcp", fRuntime.RedisURL, 0, nil)
+	taskQueue, err := openRedisTaskQueue(fRuntime.internalRequestQueueId(flowName), fRuntime.RedisURL)
 	if err != nil {
-		return fmt.Errorf("failed to initiate connection, error %v", err)
+		return fmt.Errorf("failed to open queue, error %v", err)
 	}
-	taskQueue, err := connection.OpenQueue(fRuntime.internalRequestQueueId(flowName))
-	if err != nil {
-		return fmt.Errorf("failed to get queue, error %v", err)
-	}
+
 	data, _ := json.Marshal(&Task{
 		FlowName:    flowName,
 		RequestID:   request.RequestID,
